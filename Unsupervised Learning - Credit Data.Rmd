@@ -1,0 +1,544 @@
+---
+title: "Step 4"
+output: html_document
+---
+
+Unsupervised classification
+
+Finding homogenous subgroups within larger group
+??? Clustering
+
+Finding patterns in the features of the data
+??? Dimensionality reduction
+  - Find pa!erns in the features of the data
+  - Visualization of high dimensional data
+  - Pre-processing before supervised learning
+
+
+```{r}
+library(ISLR)
+library(mclust)
+library(readr)
+library(dplyr)
+library(ggplot2)
+library(stringr)
+library(factoextra)
+library(cluster)
+library(magrittr)
+library(FactoMineR)
+library(gridExtra)
+library(vegan)
+library(MASS)
+
+```
+
+```{r}
+data_credit = read.csv("C:/Users/angel/Desktop/2º S-C/1.- Statistical Learning/Project/Step 4/data_credit_without_outliers.csv", sep=",",dec=".")
+
+
+data_credit<- transform(data_credit, BILL_SEP = as.integer(data_credit$BILL_SEP))
+data_credit<- transform(data_credit, BILL_AUG = as.integer(data_credit$BILL_AUG))
+data_credit<- transform(data_credit, BILL_JUL = as.integer(data_credit$BILL_JUL))
+data_credit<- transform(data_credit, BILL_JUN = as.integer(data_credit$BILL_JUN))
+data_credit<- transform(data_credit, BILL_MAY = as.integer(data_credit$BILL_MAY))
+data_credit<- transform(data_credit, BILL_APR = as.integer(data_credit$BILL_APR))
+data_credit<- transform(data_credit, PAY_AMT_SEP = as.integer(data_credit$PAY_AMT_SEP))
+data_credit<- transform(data_credit, PAY_AMT_AUG = as.integer(data_credit$PAY_AMT_AUG))
+data_credit<- transform(data_credit, PAY_AMT_JUL = as.integer(data_credit$PAY_AMT_JUL))
+data_credit<- transform(data_credit, PAY_AMT_JUN = as.integer(data_credit$PAY_AMT_JUN))
+data_credit<- transform(data_credit, PAY_AMT_MAY = as.integer(data_credit$PAY_AMT_MAY))
+data_credit<- transform(data_credit, PAY_AMT_APR = as.integer(data_credit$PAY_AMT_APR))
+
+
+#Excluding default.payment.next.month.
+data_credit <- data_credit[, c(-24)]
+str(data_credit)
+
+```
+
+#Preparing the data:
+
+```{r}
+lista = c("LIMIT_BAL","SEX","SEX","EDUCATION","MARRIAGE","AFE","PAY_SEP","PAY_AUG","PAY_JUL","PAY_JUN","PAY_MAY","PAY_APR","BILL_SEP","BILL_AUG","BILL_JUL","BILL_JUN","BILL_MAY","BILL_APR","PAY_AMT_SEP","PAY_AMT_AUG","PAY_AMT_JUL","PAY_AMT_JUN","PAY_AMT_MAY","PAY_AMT_APR")
+X <- data_credit[,1:23]
+```
+
+```{r}
+n.data_credit <- nrow(X)
+n.data_credit
+p.data_credit <- ncol(X)
+p.data_credit
+
+# PCA for our data_credit dataset
+PCS.data_credit <- prcomp(X)
+```
+
+
+First we are going to use clustering methods to find homogeneous subgroups within our dataset.
+In this case we will use the k-means clustering method:
+
+K-MEANS CLUSTERING
+
+# Remember that in the previous assignment, we concluded after the PCA analysis that with 3 dimensions it would be enough to explain our data.
+
+```{r}
+df <- scale(data_credit)
+res.pca <- PCA(df,  graph = FALSE)
+fviz_screeplot(res.pca, addlabels = TRUE, ylim = c(0, 35))
+
+
+# Contributions of variables to PC1
+Contribution_PC1 <- fviz_contrib(res.pca, choice = "var", axes = 1, top = 10)
+# Contributions of variables to PC2
+Contribution_PC2 <- fviz_contrib(res.pca, choice = "var", axes = 2, top = 10)
+# Contributions of variables to PC3
+Contribution_PC3 <- fviz_contrib(res.pca, choice = "var", axes = 3, top = 10)
+
+grid.arrange(Contribution_PC1,Contribution_PC2,Contribution_PC3,ncol=2)
+
+
+fviz_pca_biplot(res.pca, label="var", addEllipses=TRUE, ellipse.level=0.95,
+               select.ind = list(contrib = 30))
+
+
+
+```
+We can observe a high outlier, but we don't know who is.
+
+
+
+#Number os Cluster (with function nbclust and method silhouette)
+
+```{r}
+fviz_nbclust(data_credit, kmeans, method = "silhouette")
+```
+We conclude that ideal number of cluster would be k = 2.
+
+
+### Once we have found the most adequate cluster number, we will compare different classification algorithms, but first of all, we want to remove this possible outlier from our dataset, so we are going to use the k-means clustering to detect it in the graph, then remove it, and finally continue with comparison of differents algorithms of clustering.
+
+
+#First: Find the outlier, and remove it:
+
+```{r}
+df <- scale(data_credit)
+
+# 2. Compute k-means
+km.res <- kmeans(scale(data_credit), 2, nstart = 25)
+
+# 3. Visualize
+fviz_cluster(km.res, data = df,
+             #palette = c("#00AFBB","#2E9FDF", "#E7B800", "#FC4E07"),
+             ggtheme = theme_minimal(),
+             main = "Partitioning Clustering Plot")
+```
+Here we observe the number of our outlier, so now we are going to remove it:
+
+#improve our classification removing the Outlier (8354)
+
+```{r}
+data_credit<- data_credit[c(-8354), ]
+
+
+lista = c("LIMIT_BAL","SEX","SEX","EDUCATION","MARRIAGE","AFE","PAY_SEP","PAY_AUG","PAY_JUL","PAY_JUN","PAY_MAY","PAY_APR","BILL_SEP","BILL_AUG","BILL_JUL","BILL_JUN","BILL_MAY","BILL_APR","PAY_AMT_SEP","PAY_AMT_AUG","PAY_AMT_JUL","PAY_AMT_JUN","PAY_AMT_MAY","PAY_AMT_APR")
+X <- data_credit[,1:23]
+
+n.data_credit <- nrow(X)
+n.data_credit
+p.data_credit <- ncol(X)
+p.data_credit
+
+# PCA for our data_credit dataset
+PCS.data_credit <- prcomp(X)
+```
+
+
+
+
+
+```{r}
+#data("USArrests")
+df <- scale(data_credit)
+
+# 2. Compute k-means
+km.res <- kmeans(scale(data_credit), 2, nstart = 25)
+
+# 3. Visualize
+fviz_cluster(km.res, data = df,
+             #palette = c("#00AFBB","#2E9FDF", "#E7B800", "#FC4E07"),
+             ggtheme = theme_minimal(),
+             main = "Partitioning Clustering Plot")
+```
+
+Now, we are going to continuous doing different algortithms of clustering, and tehn compare each other:
+
+
+Split our data in 3 cluster wouldn't be a bad, idea, just out of curiosity, it would be as follows:
+```{r}
+df <- scale(data_credit)
+
+# 2. Compute k-means
+km.res <- kmeans(scale(data_credit), 3, nstart = 25)
+
+# 3. Visualize
+fviz_cluster(km.res, data = df,
+             ggtheme = theme_minimal(),
+             main = "Partitioning Clustering Plot")
+```
+
+
+
+1º K-MEANS CLUSTERING K=2:
+
+```{r}
+dis = dist(data_credit)^2
+res = kmeans(data_credit,2)
+sil = silhouette (res$cluster, dis)
+
+fviz_silhouette(sil, xlab = "K-MEANS", print.summary = TRUE)
+#plot(sil)  #--> En R-script si funciona
+colors.kmeans.PCS.X.NCI60 <- c("deepskyblue4","firebrick4")[res$cluster]
+plot(PCS.data_credit$x[,1:2],pch=20,col=colors.kmeans.PCS.X.NCI60, main = "K-MEANS")
+```
+
+
+```{r}
+dis = dist(data_credit)^2
+res = kmeans(data_credit,3)
+sil = silhouette (res$cluster, dis)
+
+fviz_silhouette(sil, xlab = "K-MEANS", print.summary = TRUE)
+
+colors.kmeans.PCS.X.NCI60 <- c("deepskyblue4","firebrick4","orange")[res$cluster]
+plot(PCS.data_credit$x[,1:2],pch=20,col=colors.kmeans.PCS.X.NCI60, main = "K-MEANS K=3")
+```
+We check that if we use 3 cluster, the solution is worse.
+
+
+
+2º K-MEDOIDS CLUSTERING:
+```{r}
+# Fix K=2 clusters as in Kmeans
+
+kmedoids.X <- pam(data_credit,k=2,metric="manhattan",stand=FALSE)
+
+# Make a plot of the first two PCs split in these two clusters
+
+colors.kmedoids.X <- c("deepskyblue4","firebrick4")[kmedoids.X$cluster]
+plot(PCS.data_credit$x[,1:2],pch=20,col=colors.kmedoids.X)
+
+# Have a look at the silhouette
+
+sil.kmedoids.X <- silhouette(kmedoids.X$cluster,dist(data_credit,method="manhattan"))
+fviz_silhouette(sil.kmedoids.X,col="deepskyblue4", xlab = "K-Medoids", print.summary = TRUE)
+
+# The solution is a bit different than the one with Kmeans. K-means solution is better than this one.
+```
+
+
+3º CLARA CLUSTERING K=2:
+
+```{r}
+clara.X.data_credit <- clara(data_credit,k=2,metric="manhattan",stand=FALSE,samples=100,sampsize=32)
+
+# Make a plot of the first two PCs split in these two clusters
+
+colors.clara.X.data_credit <- c("deepskyblue4","firebrick4")[clara.X.data_credit$cluster]
+plot(PCS.data_credit$x[,1:2],pch=20,col=colors.clara.X.data_credit)
+
+# Have a look at the silhouette
+
+sil.clara.X.data_credit <- silhouette(clara.X.data_credit$cluster,dist(data_credit,method="manhattan"))
+fviz_silhouette(sil.clara.X.data_credit,col="deepskyblue4", xlab = "Clara", print.summary = TRUE)
+
+```
+# The solution is similar to the one with Kmedoids
+
+
+HIERARCHICAL CLUSTERING with Kmeans and K=2 (Hard to see something with so many observations...)
+
+```{r}
+complete.X.data_credit <- hclust(dis,method="complete")
+plot(complete.X.data_credit,main="Complete linkage",cex=0.8, xlab = "Kmeans distances")
+rect.hclust(complete.X.data_credit,k=2,border="deepskyblue4")
+summary(complete.X.data_credit)
+```
+
+
+GENERAL DENDROGRAM:
+```{r}
+hclust.out <- hclust(dist(data_credit))
+summary(hclust.out)
+plot(hclust.out)
+abline(h = 100000, col = "red")
+
+# Alternative dendograms
+
+library(ape)
+
+plot(as.phylo(hclust.out),cex=0.8,label.offset=1)
+plot(as.phylo(hclust.out),type="fan")
+
+```
+
+
+
+
+
+HIERARCHICAL CLUSTERING - DISTANCES:
+
+NOTE: About the distances, we can not carry them out since our dataset is very large, but we are going to carry out a reduction in half, to be able to continue (without using any method of dimension reduction).
+
+New dataset:
+
+```{r}
+data_credit2 <- data_credit[1:10000,]
+X2 <- data_credit2[,1:23]
+```
+
+
+
+Hierarchical clustering analysis with Ward Method:
+
+
+1º Average linkage
+```{r}
+##################################################################################################################
+# Compute the distance matrix between the observations in the sample
+dist.X2 <- daisy(data_credit2,metric="manhattan",stand=FALSE)
+
+# Average linkage
+
+average.X.data_credit <- hclust(dist.X2,method="average")
+
+# Plot dendogram of the solution and take k=2 as with Kmeans
+
+plot(average.X.data_credit,main="Average linkage",cex=0.8)
+rect.hclust(average.X.data_credit,k=2,border="deepskyblue4")
+
+# See the assignment
+
+cutree(average.X.data_credit,2)
+table(cutree(average.X.data_credit,2))
+
+# Make a plot of the first two PCs split in these two clusters
+
+colors.average.X.data_credit <- c("deepskyblue4","firebrick4")[cutree(average.X.data_credit,2)]
+plot(PCS.data_credit$x[,1:2],pch=20,col=colors.average.X.data_credit, main = "Average linkage")
+
+# Have a look at the silhouette
+
+sil.average.X.data_credit <- silhouette(cutree(average.X.data_credit,2),dist.X2)
+fviz_silhouette(sil.average.X.data_credit,col="deepskyblue4", xlab = "Average linkage silhouette", print.summary = TRUE)
+
+# This solution is not good either
+```
+This methods classify very well, since we obtain in the first cluster 0.78 "Average Silhouette Width", and in the second one, we obtaned 0.63 points. This means that a strong structure has been found (in the second, is reasonable).
+
+
+
+2º Ward Method
+
+```{r}
+# Compute the distance matrix between the observations in the sample
+dist.X2 <- daisy(data_credit2,metric="manhattan",stand=FALSE)
+
+# Ward method
+
+ward.X2 <- hclust(dist.X2, method="ward.D2")
+
+# Plot dendogram of the solution and take k=2 as with Kmeans
+
+plot(ward.X2,main="Ward linkage",cex=0.8, xlab = "Ward Dendrogram solution with K=2")
+rect.hclust(ward.X2,k=2,border="deepskyblue4")
+cutree(ward.X2,2)
+table(cutree(ward.X2,2))
+```
+
+
+```{r}
+# Make a plot of the first two PCs split in these two clusters with Ward method.
+
+colors.ward.X2 <- c("deepskyblue4","firebrick4")[cutree(ward.X2,2)]
+plot(PCS.data_credit$x[,1:2],pch=20,col=colors.ward.X2, main = "WARD")
+
+# Have a look at the silhouette
+
+sil.ward.X2 <- silhouette(cutree(ward.X2,2),dist.X2)
+fviz_silhouette(sil.ward.X2,col="deepskyblue4", xlab = "Ward silhouette", print.summary = TRUE)
+
+
+```
+
+This one, with the Ward method, is worse than previously, since we obtaned in the second cluster an "Average Silhouette Width" of 0.21. This means that no substantial structure has been found. However, the first cluster is ok, but comparing with the Average linkage, this second is better.
+
+
+
+
+
+
+
+
+Like we explain in the beggining of this work, we need a large number os PCs to explain a 70% of the total variability (6)
+
+```{r}
+df <- scale(data_credit)
+res.pca <- PCA(df,  graph = FALSE)
+fviz_screeplot(res.pca, addlabels = TRUE, ylim = c(0, 35))
+```
+
+
+
+```{r}
+# Make a plot of the first two PCs
+plot(PCS.data_credit$x[,1:2],pch=20,col=colors.clara.X.data_credit, main = "First two components")
+```
+This plot suggests that there migth be some options to distinguish the two groups.
+
+
+We are going to use : Linear Discriminant Analysis (LDA) 
+
+First, obtain the training and the test samples. For that, we take at random the 70% of the observations as the training sample and the other 30% of the observations as the test sample.
+
+
+
+
+################################################################################################################################
+################################################################################################################################
+################################################################################################################################
+################################################################################################################################
+################################################################################################################################
+################################################################################################################################
+################################################################################################################################
+################################################################################################################################
+################################################################################################################################
+################################################################################################################################
+
+WE HAD A PROBLEM, WE COULDN'T SOLVE IT!!!!
+
+```{r}
+
+
+lista = c("LIMIT_BAL","SEX","SEX","EDUCATION","MARRIAGE","AFE","PAY_SEP","PAY_AUG","PAY_JUL","PAY_JUN","PAY_MAY","PAY_APR","BILL_SEP","BILL_AUG","BILL_JUL","BILL_JUN","BILL_MAY","BILL_APR","PAY_AMT_SEP","PAY_AMT_AUG","PAY_AMT_JUL","PAY_AMT_JUN","PAY_AMT_MAY","PAY_AMT_APR")
+X <- data_credit[,1:23]
+
+n.data_credit <- nrow(X)
+n.data_credit
+p.data_credit <- ncol(X)
+p.data_credit
+
+# PCA for our data_credit dataset
+PCS.data_credit <- prcomp(X)
+
+# Sample sizes of both data sets
+
+n.credit.train <- floor(.7 * n.data_credit)
+n.credit.train
+n.credit.test <- n.data_credit - n.credit.train
+n.credit.test
+
+# Obtain the indices of the observations in both data sets at random
+
+indices.credit.train <- sort(sample(1:n.data_credit,n.credit.train))
+length(indices.credit.train)
+head(indices.credit.train)
+
+indices.credit.test <- setdiff(1:n.data_credit,indices.credit.train)
+length(indices.credit.test)
+head(indices.credit.test)
+
+# Obtain the training data matrix and response vector
+
+credit.X.train <- n.data_credit[indices.credit.train]
+head(credit.X.train)
+credit.Y.train <- p.data_credit[indices.credit.train]
+head(credit.Y.train)
+
+
+# Obtain the test data matrix and response vector
+
+credit.X.test <- n.data_credit[indices.credit.test]
+head(credit.X.test)
+credit.Y.test <- p.data_credit[indices.credit.test]
+head(credit.Y.test)
+
+# Which are the proportions of credit and non-credit emails in both data sets?
+
+sum(credit.Y.train=="noncredit")/n.credit.train
+sum(credit.Y.train=="credit")/n.credit.train
+
+sum(credit.Y.test=="noncredit")/n.credit.test
+sum(credit.Y.test=="credit")/n.credit.test
+
+
+# So, they are close to the original 60.6% of the non-credit emails are non-credit and 39.4% are credit
+
+```
+
+
+```{r}
+##################################################################################################################
+# Second, estimate the unkwnon parameters with the training sample
+##################################################################################################################
+
+# Use the function lda to estimate the unkwnon parameters
+
+lda.credit.train <- lda(credit.Y.train ~ .,data=credit.X.train)
+
+# Estimated prior probabilities
+
+lda.credit.train$prior
+
+# Estimated sample mean vectors
+
+lda.credit.train$means
+
+# The function does not return the estimated covariance matrix
+
+```
+
+
+```{r}
+##################################################################################################################
+# Third, classify the observations in the test sample
+##################################################################################################################
+
+# Use the function predict to perform the classification of the observations in the test sample
+
+lda.credit.test <- predict(lda.credit.train,newdata=credit.X.test)
+
+# The vector of classifications made can be found here
+
+lda.credit.test$class
+
+# Number of emails classified in each group
+
+table(lda.credit.test$class)
+
+# Contingency table with good and bad classifications
+
+table(credit.Y.test,lda.credit.test$class)
+
+# Test Error Rate (TER)
+
+lda.TER.credit <- mean(credit.Y.test!=lda.credit.test$class)
+lda.TER.credit
+
+# Posterior probabilities of the classifications made with the test sample
+
+prob.lda.test.credit <- lda.credit.test$posterior
+head(prob.lda.test.credit)
+
+# Make a plot of the posterior probabilities of being noncredit to find the mistakes
+# In orange, wrong classifications, in green, good classifications
+
+colors.lda.errors.credit <- c("orange","chartreuse")[1*(lda.credit.test$class==credit.Y.test)+1]
+plot(1:n.credit.test,prob.lda.test.credit[,1],col=colors.lda.errors.credit,pch=20,type="p",xlab="Test sample",ylab="Posterior probabilities",
+     main="Probabilities of noncredit")
+abline(h=0.5)
+```
+
+
+
+
+
