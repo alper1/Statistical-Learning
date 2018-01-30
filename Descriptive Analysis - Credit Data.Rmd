@@ -1,0 +1,476 @@
+---
+title: "Default of Credit Card Clients"
+output:
+  word_document: default
+  html_document:
+    df_print: paged
+  pdf_document: default
+---
+
+## Description of Dataset and Objective
+
+
+The project aimed at the case of customers default payments in Taiwan and classify their credit situation as default or not.
+
+This dataset contains information on default payments, demographic factors, credit data, history of payment, and bill statements of credit card clients in Taiwan from April 2005 to September 2005.
+We have ID column, credit amount column, four columns for demographic information, six columns for history of past payments, six columns for amounts of bills, six columns for amounts of previous payments, and the last column shows the default payment statue.
+The dataset includes 20 quantitative and 4 qualitative variables.
+
+"ID"= Unique identification of the client
+"LIMIT_BAL"= Amount of the given credit (NT Dollar - Total amount with/out family)
+"SEX"= Gender (1=Male, 2=Female)
+"EDUCATION"= Education (1=Graduate school, 2=University, 3=High school, 4=Others)
+"MARRIAGE"= Marital status (1=Married, 2=Single, 3=Divorced, 4=Others)
+"AGE"= Age (year)
+"PAY_0"= Payment in September, 2005
+"PAY_2"= Payment in August, 2005
+"PAY_3"= Payment in July, 2005
+"PAY_4"= Payment in Jun, 2005
+"PAY_5"= Payment in May, 2005
+"PAY_6"= Payment in April, 2005
+"BILL_AMT1"= Amount of bill in September, 2005
+"BILL_AMT2"= Amount of bill in August, 2005
+"BILL_AMT3"= Amount of bill in July, 2005
+"BILL_AMT4"= Amount of bill in Jun, 2005
+"BILL_AMT5"= Amount of bill in May, 2005
+"BILL_AMT6"= Amount of bill in April, 2005
+"PAY_AMT1"= Amount of previous payment in September, 2005
+"PAY_AMT2"= Amount of previous payment in August, 2005
+"PAY_AMT3"= Amount of previous payment in July, 2005
+"PAY_AMT4"= Amount of previous payment in Jun, 2005
+"PAY_AMT5"= Amount of previous payment in May, 2005
+"PAY_AMT6"= Amount of previous payment in April, 2005
+"default.payment.next.month"= Client's behaviour (0=not default, 1=default)
+
+
+####Required Libraries
+
+
+```{r}
+library(ggplot2)
+library(RColorBrewer)
+library(gridExtra)
+library(corrplot)
+library(Amelia)
+library(gridExtra)
+library(ggthemes) # visualization
+library(scales) # visualization
+library(dplyr) # data manipulation
+library(mice) # imputation
+library(randomForest) # classification algorithm
+library(gtools) # for discretisation
+library(corrplot)
+library(Hmisc)
+library(devtools)
+library(PerformanceAnalytics)
+library(FactoMineR)
+library(plotly)
+library(ISLR)
+library(MASS)
+require(robustbase)
+```
+
+```{r}
+#Directory ALPER:
+#setwd("C:/Users/alper/Desktop")
+
+#Directory ANGEL:
+#setwd("C:/Users/angel/Desktop/1.- Statistical Learning/Project")
+
+data_credit <- read.csv("UCI_Credit_Card.csv")
+str(data_credit)
+```
+
+
+###Preparing The Data
+
+First of all, null values are checked and observed that our dataset is totally clean. In order to have meaningful column names, changed some of the column names of the dataset. Also, types of qualitative variables are changed from numeric to factor to use them properly. Finally, the levels of Education and Marital Status changed for a better analysis and interpretation.
+```{r}
+### column names
+
+colnames(data_credit)[7] <- "PAY_SEP"
+colnames(data_credit)[8] <- "PAY_AUG"
+colnames(data_credit)[9] <- "PAY_JUL"
+colnames(data_credit)[10] <- "PAY_JUN"
+colnames(data_credit)[11] <- "PAY_MAY"
+colnames(data_credit)[12] <- "PAY_APR"
+colnames(data_credit)[13] <- "BILL_SEP"
+colnames(data_credit)[14] <- "BILL_AUG"
+colnames(data_credit)[15] <- "BILL_JUL"
+colnames(data_credit)[16] <- "BILL_JUN"
+colnames(data_credit)[17] <- "BILL_MAY"
+colnames(data_credit)[18] <- "BILL_APR"
+colnames(data_credit)[19] <- "PAY_AMT_SEP"
+colnames(data_credit)[20] <- "PAY_AMT_AUG"
+colnames(data_credit)[21] <- "PAY_AMT_JUL"
+colnames(data_credit)[22] <- "PAY_AMT_JUN"
+colnames(data_credit)[23] <- "PAY_AMT_MAY"
+colnames(data_credit)[24] <- "PAY_AMT_APR"
+
+#Missing values
+data_credit[!complete.cases(data_credit),]
+#missmap(data_credit,legend = TRUE,y.cex = 0.1, x.cex = 0.5)
+
+#education updated - ##Replace 0,4,5 and 6 by 4 "others".
+for (i in 1:nrow(data_credit)) {
+  if (data_credit[i,4] == 0 | data_credit[i,4] == 4 | data_credit[i,4] == 5 | data_credit[i,4] == 6 ) {
+    data_credit[i,4] <- 4 }}
+#data_credit[,4]
+table(data_credit$EDUCATION)
+
+
+#marital status updated - ##Recode 1-others, 2-married, 3-single, 4-divorced
+for (i in 1:nrow(data_credit)) {
+  if (data_credit[i,5] == 0) {data_credit[i,5] <- 1}
+  else if (data_credit[i,5] == 1) {data_credit[i,5] <- 2}
+  else if (data_credit[i,5] == 2) {data_credit[i,5] <- 3}
+  else if (data_credit[i,5] == 3) {data_credit[i,5] <- 4}
+  }
+table(data_credit$MARRIAGE)
+
+#quantitive to factor
+data_credit$SEX <-factor(data_credit$SEX)
+data_credit$EDUCATION <- factor(data_credit$EDUCATION)
+data_credit$MARRIAGE <- factor(data_credit$MARRIAGE)
+data_credit$default.payment.next.month<-factor(data_credit$default.payment.next.month)
+
+str(data_credit)
+```
+
+#Descriptive Analysis
+In this point, variables are explored, how they distributed and how their effects on our indicator variable "Default payment".
+
+
+###Indicator Variable
+```{r}
+#abs.freq.Y
+abs.freq.Y <- table(data_credit$default.payment.next.month)
+abs.freq.Y
+
+# Barplot of indicator variable credit data set
+
+barplot(abs.freq.Y ,col=c("deepskyblue", "brown1"),
+        main="Indicator Variable - Default or Not",
+        ylab="Number of Clients",xlab="Indicator variable",
+        names.arg = c("Not Default", "Default"))
+legend("topright",c("Not Default","Default"), fill=c("deepskyblue", "brown1"))
+text(0.7, 13000, "%78")
+text(1.9, 3500, "%22")
+
+```
+
+We can see that the proportion of default in the payment is clearly lower than not have default payment. In our sample, we have 23.364 clients without default payment and only 6.636 with default payment. It would be interesting to analyse throughout this project what are the reasons for this people to have defaults. On the other hand, we have to keep this fact in mind on the prediction proccess that we have unbalanced distribution of indicator variable.
+
+
+
+
+###Plots Of Demographic Data
+We have 4 variables to explain demographic information about our clients. They are "Age", "Education", "Marital Status" and "Sex".
+
+```{r}
+
+g1<-ggplot(data_credit, aes(x = AGE, fill = default.payment.next.month)) +
+  scale_fill_discrete(name= "Default Payment\nNext Month",
+                      breaks=c(0, 1),
+                      labels=c("No", "Yes")) +
+  geom_bar() +
+  labs(x = 'Age', y = 'number of people') +
+  theme_solarized()
+
+
+
+g2<-ggplot(data_credit, aes(x = SEX, fill = default.payment.next.month)) +
+  scale_fill_discrete(name= "Default Payment\nNext Month",
+                      breaks=c(0, 1),
+                      labels=c("No", "Yes")) +
+  geom_bar() +
+  labs(x = 'Sex', y = 'number of people') +
+  scale_x_discrete(labels = c("Male","Female")) +
+  theme_solarized()
+
+
+g3<-ggplot(data_credit, aes(x = EDUCATION, fill = default.payment.next.month)) +
+  scale_fill_discrete(name= "Default Payment\nNext Month",
+                      breaks=c(0, 1),
+                      labels=c("No", "Yes")) +
+  geom_bar() +
+  labs(x = 'Education', y = 'number of people') +
+  scale_x_discrete(labels = c("Gr","Un.", "High", "Ot.")) +
+  theme_solarized()
+
+
+
+g4<-ggplot(data_credit, aes(x = MARRIAGE, fill = default.payment.next.month)) +
+  scale_fill_discrete(name= "Default Payment\nNext Month",
+                      breaks=c(0, 1),
+                      labels=c("No", "Yes")) +
+  geom_bar() +
+  labs(x = 'Marital Status', y = 'number of people') +
+  scale_x_discrete(labels = c("Others","Marriage", "Single", "Divorced")) +
+  theme_solarized()
+
+
+grid.arrange(g1, g2, g3, g4)
+
+```
+
+1-Age: Most of the clients are young people. The largest amount of people with default payment is found in ages close to 30 years. However, the proportion of defaults and not defaults have the same proportion for each age.
+2-Sex:Female are more present in our sample, also shows a greater number of defaults, however it happens as in the "Age", proportionally with a naked eye there aren't differences between Male and Women in the number of defaults. 
+3-Education: People with university studies is more usual in our sample, also people with more default payment are found in University and Graduate School education. So conclude that Graduate School and University education have a similar proportion of default payment amount.
+4-Marital Status: The variable Marital Status is divided in four cathegorical levels, however we can see that Marriage clients and single Clients is the close to 99% of our sample. Both are distributed very similar.
+
+
+
+
+```{r}
+###Limit Balance with qualitative variables###
+
+d1 <- ggplot(data_credit, aes(factor(SEX), (LIMIT_BAL/1000), fill=EDUCATION)) + 
+  geom_boxplot() +
+  ggtitle("            LIMIT BALANCES WITH QUALITATIVES VARIABLES") +
+  xlab("Sex") + 
+  ylab("BLimit(x1000 NT$)") + 
+  scale_fill_brewer(palette = "Set1")
+
+d2 <- ggplot(data_credit, aes(factor(MARRIAGE), (LIMIT_BAL/1000), fill=SEX)) + 
+  geom_boxplot() +
+  xlab("Marital Status") + 
+  ylab("BLimit(x1000 NT$)") + 
+  scale_fill_brewer(palette = "Paired")
+
+grid.arrange(d1, d2)
+```
+
+In both box-whisker plots we can observe the distribution of the qualitatives variables in function of the Limit Balance. Regarding to the first graph, we can see High School get the lowest Limit Balance of the credits and it is the same for both Male and Female. On the other hand, Graduate School have the gratest Limit Balance in both Genders. So, we can conclude of this first graph, that Sex doesn't influence in the Limit Balance, however Education does present differences.
+
+With respect to the second graph, we can tell that there is not much differences in the Marital Status over the Limit Balance, and like we concluded previously, the Sex is not important in the Limimt Balance neither.
+
+
+
+```{r}
+### Bills Expdenditure By Months ####
+
+apr <- ggplot(aes(x=AGE,y=BILL_APR/1000),data=data_credit) +
+  xlab("Age") + 
+  ylab("Amount of Bill in April") +
+  coord_cartesian(xlim = c(21,60),ylim = c(0,700))+  
+  geom_jitter(alpha=0.3, color="orange") + geom_smooth(stat='summary', fun.y=mean)
+
+may <- ggplot(aes(x=AGE,y=BILL_MAY/1000),data=data_credit) +
+  xlab("Age") + 
+  ylab("Amount of Bill in May") +
+  coord_cartesian(xlim = c(21,60),ylim = c(0,700))+  
+  geom_jitter(alpha=0.3, color="blue") + geom_smooth(stat='summary', fun.y=mean)
+
+jun <- ggplot(aes(x=AGE,y=BILL_JUN/1000),data=data_credit) +
+  xlab("Age") + 
+  ylab("Amount of Bill in June") +
+  coord_cartesian(xlim = c(21,60),ylim = c(0,700))+  
+  geom_jitter(alpha=0.3, color="green") + geom_smooth(stat='summary', fun.y=mean)
+
+jul <- ggplot(aes(x=AGE,y=BILL_JUL/1000),data=data_credit) +
+  xlab("Age") + 
+  ylab("Amount of Bill in July") +
+  coord_cartesian(xlim = c(21,60),ylim = c(0,700))+  
+  geom_jitter(alpha=0.3, color="orange") + geom_smooth(stat='summary', fun.y=mean)
+
+aug <- ggplot(aes(x=AGE,y=BILL_AUG/1000),data=data_credit) +
+  xlab("Age") + 
+  ylab("Amount of Bill in August") +
+  coord_cartesian(xlim = c(21,60),ylim = c(0,700))+  
+  geom_jitter(alpha=0.3, color="blue") + geom_smooth(stat='summary', fun.y=mean)
+
+sep <- ggplot(aes(x=AGE,y=BILL_SEP/1000),data=data_credit) +
+  xlab("Age") + 
+  ylab("Amount of Bill in September") +
+  coord_cartesian(xlim = c(21,60),ylim = c(0,700))+  
+  geom_jitter(alpha=0.3, color="green") + geom_smooth(stat='summary', fun.y=mean)
+
+grid.arrange(apr,may,jun,jul,aug,sep,ncol=3)
+
+
+```
+
+Bills Expdenditure By Months could be interesting to analyse depending the Age because maybe there were some differences in the months. However, there aren't significant differences, so its not going to analysed more.
+
+```{r}
+# Bill Density for Default Information
+Average_BILL<- ((data_credit$BILL_SEP + data_credit$BILL_AUG + data_credit$BILL_JUL + data_credit$BILL_JUN + data_credit$BILL_MAY + data_credit$BILL_APR)/6)
+
+ggplot(data_credit, aes(x = Average_BILL, fill = default.payment.next.month)) +
+  scale_fill_discrete(name= "Default Payment\nNext Month",
+                      breaks=c(0, 1),
+                      labels=c("No", "Yes")) +
+  geom_density(alpha = 0.2) +
+  labs(x = 'Average Bill') +
+  xlim(-10000, 250000) + theme_minimal()
+
+
+
+```
+
+Here is shown distributions of "Default" and "Not Default" with the average bill. The density function will allow us calculation of the probability of occurrence of them based on the "Average Bill". We see that if the line stands out is blue, it means that the probability of having "Default Payment" is higher than having "Not Default". We can see how the density function, from an "Average Bill" of 50,000 (more or less), shows that the probability of "Not Default" is greater than "Default". However, interesting observation is between 15,000 and 35,000 "Average Bill" since the probability of "Default Payment" is greater.
+
+
+```{r}
+### correlation matrix ###
+
+M <- cor(subset(data_credit, select = c(LIMIT_BAL,
+                                        PAY_SEP, PAY_AUG, PAY_JUL, PAY_JUN, PAY_MAY, PAY_APR,
+                                        BILL_SEP,BILL_AUG,BILL_JUL, BILL_JUN,BILL_MAY,BILL_APR,
+                                        PAY_AMT_SEP,PAY_AMT_AUG,PAY_AMT_JUL,PAY_AMT_JUN,PAY_AMT_MAY,PAY_AMT_APR
+                                        )))
+corrplot(M, method = "number")
+```
+
+In the correlation matrix we can see which variables are correlated each other. In our case, LIMIT_BAL is not very correlated with another variable, like same with PAY_AMT_MONTH. However the group of variables PAY_MONTH are positively correlated each other, like same with BILL_MONTH (higher).
+
+
+#Outliers
+In this part, possible outliers will be detected in the dataset. Mahalanobis distances are used to observe the stranges values. We want to study on reasons of the strangness.
+
+In order to get detailed information, split the data according to the response variable (0 or 1).
+
+```{r}
+# Define the data matrix and the indicator vector
+
+credit.X <- data_credit[,2:(ncol(data_credit)-1)]
+credit.X[2:4]<-NULL
+head(credit.X)
+
+credit.Y <- data_credit[,ncol(data_credit)]
+head(credit.Y)
+# The indicator vector is an important factor to discriminate between defaults
+# Split the data matrix in two groups
+
+credit.def <- credit.X[credit.Y==1,]
+head(credit.def)
+
+credit.nondef <- credit.X[credit.Y==0,]
+head(credit.nondef)
+
+```
+
+```{r}
+# Obtain the (squared) Mahalanobis distances with respect to the sample mean vector for the def credits
+
+smv.credit.def <- colMeans(credit.def)
+#smv.credit.def
+
+S.credit.def <- cov(credit.def)
+#S.credit.def
+
+mah.credit.def <- mahalanobis(credit.def,smv.credit.def,S.credit.def)
+#mah.credit.def
+
+# Sort the Mahalanobis distances
+
+sort.mah.credit.def <- sort(mah.credit.def,index.return=TRUE)$x
+#sort.mah.credit.def
+#sort.mah.credit.def[1]
+
+# Plot the sorted distances
+
+plot(sort.mah.credit.def,pch=19,col="deepskyblue",xlab="",ylab="",main="Mahalanobis distances for the def clients")
+abline(h=1500,col="red",lwd=2, lty=3)
+```
+
+The graph shows outliers for the clients with default payments. We consider 1.500 as the limit of distance, so we detect 3 observations as outliers.
+
+
+```{r}
+# Obtain the (squared) Mahalanobis distances with respect to the sample mean vector for the nondef credits
+
+smv.credit.nondef <- colMeans(credit.nondef)
+#smv.credit.nondef
+
+S.credit.nondef <- cov(credit.nondef)
+#S.credit.nondef
+
+mah.credit.nondef <- mahalanobis(credit.nondef,smv.credit.nondef,S.credit.nondef)
+#mah.credit.nondef
+
+# Sort the Mahalanobis distances
+
+sort.mah.credit.nondef <- sort(mah.credit.nondef,index.return=TRUE)$x
+#sort.mah.credit.nondef
+#sort.mah.credit.nondef[1:2]
+
+# Plot the sorted distances
+
+plot(sort.mah.credit.nondef,pch=19,col="deepskyblue",xlab="",ylab="",main="Mahalanobis distances for the nondef clients")
+abline(h=5000,col="red",lwd=2, lty=3)
+```
+The graph shows outliers for the clients with non default payments. In this case, 5.000 as the limit of distance, so 2 observations are detected as outliers.
+
+
+```{r}
+#here we get the row information sorted by mahalonobis distances in decreasing order to get greater numbers
+sort.mah.credit.def_outliers <- sort(mah.credit.def,index.return=TRUE,decreasing=TRUE)$ix
+#Here we see the rows and the distance obtained
+num_out_def<-length(mah.credit.def[mah.credit.def>1500])
+#num_out_def
+
+##tables that we are going to use to create new table without outliers##
+credit.x.final<-data_credit[,2:(ncol(data_credit))]
+credit.y.final <- data_credit[,ncol(data_credit)]
+credit.def.new <- credit.x.final[credit.y.final==1,]
+head(credit.def)
+credit.nondef.new <- credit.x.final[credit.y.final==0,]
+head(credit.nondef)
+#######################################################################
+```
+
+```{r}
+#Remove this rows in outliers_def
+credit.def_without_outliers<-credit.def.new[-c(sort.mah.credit.def_outliers[1:num_out_def]),]
+#nrow(credit.def_without_outliers)
+#3 rows deleted.
+```
+
+```{r}
+### Obtain the (squared) Mahalanobis distances with respect to the sample mean vector for the nondef credits
+
+smv.credit.nondef <- colMeans(credit.nondef)
+#smv.credit.nondef
+
+S.credit.nondef <- cov(credit.nondef)
+#S.credit.nondef
+
+mah.credit.nondef <- mahalanobis(credit.nondef,smv.credit.nondef,S.credit.nondef)
+#mah.credit.nondef
+
+# Sort the Mahalanobis distances
+#Here we see the rows and the distance obtained
+sort.mah.credit.nondef <- sort(mah.credit.nondef,index.return=TRUE)$x
+#sort.mah.credit.nondef
+tail(sort.mah.credit.nondef, 10)
+
+#Here we get just the information of the rows
+sort.mah.credit.nondef_row <- sort(mah.credit.nondef,index.return=TRUE)$ix
+tail(sort.mah.credit.nondef_row, 10)
+
+```
+
+```{r}
+#here we get the row information sorted by mahalonobis distances in decreasing order to get greater numbers
+sort.mah.credit.nondef_outliers <- sort(mah.credit.nondef,index.return=TRUE,decreasing=TRUE)$ix
+#Here we see the rows and the distance obtained
+num_out_nondef<-length(mah.credit.nondef[mah.credit.nondef>5000])
+#num_out_nondef
+
+#Remove this rows in outliers_def
+credit.nondef_without_outliers<-credit.nondef.new[-c(sort.mah.credit.nondef_outliers[1:num_out_nondef]),]
+#nrow(credit.nondef_without_outliers)
+#2 rows deleted.
+```
+
+```{r}
+###### Now we do a UNION with two tables (without outliers) #####(library(dplyr))
+data_credit_without_outliers<-bind_rows(credit.def_without_outliers,credit.nondef_without_outliers)
+#nrow(data_credit_without_outliers)(5 rows less)
+#nrow(data_credit)
+numberofdeletedrows<-nrow(data_credit)-nrow(data_credit_without_outliers)
+```
+
+We had 3 outliers for Default Payment Clients and 2 ourliers for Non Default Payment Clients, so we removed them to improve our work.
