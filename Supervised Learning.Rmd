@@ -329,7 +329,7 @@ library(caret)
 
 
 ```{r}
-data_credit = read.csv("C:/Users/angel/Desktop/2บ S-C/1.- Statistical Learning/Project/Step 4/data_credit_without_outliers.csv", sep=",",dec=".")
+data_credit = read.csv("C:/Users/angel/Desktop/2ยบ S-C/1.- Statistical Learning/Project/Step 4/data_credit_without_outliers.csv", sep=",",dec=".")
 data_credit.X <- data_credit[, 1:(ncol(data_credit)-1)]
 data_credit.Y <- data_credit[, 24]
 data_credit.Y<- factor(data_credit.Y,
