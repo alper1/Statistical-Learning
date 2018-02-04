@@ -1,0 +1,575 @@
+---
+title: "Project Statistical Learning Step 5"
+output: html_document
+---
+
+Libraries
+
+```{r}
+library(kernlab)
+library(class)
+library(nnet)
+```
+
+
+```{r}
+data_credit = read.csv("data_credit_without_outliers.csv", sep=",",dec=".")
+data_credit.X <- data_credit[, 1:(ncol(data_credit)-1)]
+data_credit.Y <- data_credit[, 24]
+data_credit.Y<- factor(data_credit.Y,
+levels = c(1,0),
+labels = c("Default Payment", "Not Default Payment"))
+```
+
+
+```{r}
+# Obtain sample size and dimensions of the data matrix
+
+n.data_credit.X <- nrow(data_credit.X)
+n.data_credit.X
+p.data_credit.X <- ncol(data_credit.X)
+p.data_credit.X
+
+
+# Compute number of default payments in each group
+
+n.nondata_credit <- sum(data_credit.Y=="Not Default Payment")
+n.nondata_credit
+n.data_credit <- sum(data_credit.Y=="Default Payment")
+n.data_credit
+
+# Proportions of default payments in each class
+
+(n.nondata_credit / n.data_credit.X)*100
+(n.data_credit / n.data_credit.X)*100
+
+
+```
+
+# Thus, 77.88% of the payments are not default payments and 22.11% are default payments
+
+
+
+##################################################################################################################
+##################################################################################################################
+##################################################################################################################
+# First, obtain the training and the test samples. For that, we take at random the 70% of the observations as the
+# training sample and the other 30% of the observations as the test sample
+##################################################################################################################
+##################################################################################################################
+##################################################################################################################
+
+```{r}
+# Fix the seed to have the same results
+
+set.seed(1)
+
+# Sample sizes of both data sets
+
+n.data_credit.train <- floor(.7 * n.data_credit.X)
+#n.data_credit.train
+n.data_credit.test <- n.data_credit.X - n.data_credit.train
+#n.data_credit.test
+
+
+# Obtain the indices of the observations in both data sets at random
+
+indices.data_credit.train <- sort(sample(1:n.data_credit.X,n.data_credit.train))
+#length(indices.data_credit.train)
+#head(indices.data_credit.train)
+
+indices.data_credit.test <- setdiff(1:n.data_credit.X,indices.data_credit.train)
+#length(indices.data_credit.test)
+#head(indices.data_credit.test)
+
+# Obtain the training data matrix and response vector
+
+data_credit.X.train <- data_credit.X[indices.data_credit.train,]
+#head(data_credit.X.train)
+data_credit.Y.train <- data_credit.Y[indices.data_credit.train]
+#head(data_credit.Y.train)
+
+# Obtain the test data matrix and response vector
+
+data_credit.X.test <- data_credit.X[indices.data_credit.test,]
+#head(data_credit.X.test)
+data_credit.Y.test <- data_credit.Y[indices.data_credit.test]
+#head(data_credit.Y.test)
+
+# Which are the proportions of data_credit and non-data_credit emails in both data sets?
+
+(sum(data_credit.Y.train=="Not Default Payment")/n.data_credit.train)*100
+(sum(data_credit.Y.train=="Default Payment")/n.data_credit.train)*100
+
+(sum(data_credit.Y.test=="Not Default Payment")/n.data_credit.test)*100
+(sum(data_credit.Y.test=="Default Payment")/n.data_credit.test)*100
+
+```
+
+# So, they are close to the original 78.38% of the not data_credit payments are not data_credit payments and  21.61% are data_credit payments
+
+
+
+##################################################################################################################
+##################################################################################################################
+##################################################################################################################
+# Second, apply KNN and select the best K with LOOCV
+##################################################################################################################
+##################################################################################################################
+##################################################################################################################
+
+# There are many different implementations in R of the KNN procedure. We use the library class
+
+```{r}
+# knn is implemented with the Euclidean distance. Therefore, we standarize both data sets
+
+stan.data_credit.X.train <- scale(data_credit.X.train)
+stan.data_credit.X.test <- scale(data_credit.X.test)
+
+# We take K ranging from 3 to 50 as the sample size is big enough and estimate the LOOCV error rate
+
+error.rate.loocv <- matrix(NA,nrow=50,ncol=1)
+for (i in 3 : 50){
+  print(i)
+  knn.out <- knn.cv(stan.data_credit.X.train,data_credit.Y.train,k=i)
+  error.rate.loocv[i] <- 1 - mean(knn.out==data_credit.Y.train)
+}
+plot(1:50,error.rate.loocv,pch=20,col="deepskyblue4",type="b")
+
+# Take K as the one that gives the minimum test error
+
+K <- which.min(error.rate.loocv)
+K
+
+```
+
+
+
+
+
+##################################################################################################################
+# Third, we classify the responses in the test data set and estimate the test error rate with the K selected
+##################################################################################################################
+
+
+
+```{r}
+
+
+# Classify the responses in the test data set with the K selected
+
+data_credit.knn.K.test <- knn(stan.data_credit.X.train,stan.data_credit.X.test,data_credit.Y.train,k=K,prob=TRUE)
+head(data_credit.knn.K.test)
+
+# Number of data_credit payments classified in each group
+
+summary(data_credit.knn.K.test)
+
+# Table with good and bad classifications
+
+table(data_credit.Y.test,data_credit.knn.K.test)
+
+# Obtain the Test Error Rate (TER)
+
+knn.data_credit.TER <- mean(data_credit.Y.test!=data_credit.knn.K.test)
+knn.data_credit.TER
+
+# Estimated probabilities of the classifications made for the winner group
+
+prob.data_credit.knn.K.test <- attributes(data_credit.knn.K.test)$prob
+head(prob.data_credit.knn.K.test)
+
+# Make a plot of the probabilities of the winner group
+# In orange, wrong classifications, in green, good classifications
+
+colors.errors.data_credit <- c("orange","chartreuse")[1*(data_credit.Y.test==data_credit.knn.K.test)+1]
+plot(1:n.data_credit.test,prob.data_credit.knn.K.test,col=colors.errors.data_credit,pch=20,type="p",xlab="Test sample",ylab="Winning probabilities")
+
+# Note that there have been some ties. In there are two close observations to the observation to classify, the two of them are included
+```
+
+
+##################################################################################################################
+##################################################################################################################
+# Logistic regression
+##################################################################################################################
+##################################################################################################################
+
+```{r}
+##################################################################################################################
+# First, estimate the parameters of the logistic regression model with the training sample
+##################################################################################################################
+
+# Fit the model with the training samples
+
+lr.data_credit.train <- multinom(data_credit.Y.train ~ .,data=data_credit.X.train)
+
+# Have a look at the estimated coefficients and their standard errors
+
+summary(lr.data_credit.train)
+
+# We can see which are the most significant coefficients with the t-test
+
+# First, compute the t-tests
+
+t.test.lr.data_credit.train <- summary(lr.data_credit.train)$coefficients/summary(lr.data_credit.train)$standard.errors
+t.test.lr.data_credit.train
+
+# Second, sort the absolute value of the t-test in decreasing order
+
+sort(abs(t.test.lr.data_credit.train),decreasing=TRUE)
+
+# We can see that the most relevant variables appear to be PAY_SEP, SEX, PAY_MAY, MARRIAGE and PAY_JUL.
+# dditionally, some of the coefficients are not significant, so they do not appear to have influence in the classification We will get back to this later.
+
+```
+
+```{r}
+##################################################################################################################
+# Second, we classify the responses in the test data set and estimate the test error rate
+##################################################################################################################
+
+# Classify the responses in the test data set
+
+lr.data_credit.test <- predict(lr.data_credit.train,newdata=data_credit.X.test)
+head(lr.data_credit.test)
+
+# Number of data_credit payments classified in each group
+
+summary(lr.data_credit.test)
+
+# Table with good and bad classifications
+
+table(data_credit.Y.test,lr.data_credit.test)
+
+# Obtain the Test Error Rate (TER)
+
+lr.data_credit.TER <- mean(data_credit.Y.test!=lr.data_credit.test)
+lr.data_credit.TER
+
+# Obtain the probabilities of the first level which in this case is not default payment
+
+prob.lr.data_credit.test <- predict(lr.data_credit.train,newdata=data_credit.X.test,type ="probs")
+head(prob.lr.data_credit.test)
+
+# Make a plot of the errors made and the probabilities to see if they are complicated cases
+# In orange, wrong classifications, in green, good classifications
+
+colors.errors.lr.data_credit.test <- c("orange","chartreuse")[1*(data_credit.Y.test==lr.data_credit.test)+1]
+plot(1:n.data_credit.test,prob.lr.data_credit.test,col=colors.errors.lr.data_credit.test,pch=20,type="p",xlab="Test sample",ylab="Probabilities")
+abline(h=0.5)
+```
+
+
+```{r}
+##################################################################################################################
+# Third, try to improve the test error rate by deleting predictors without discriminatory power
+##################################################################################################################
+
+# Use the function step to delete the useless predictors
+
+step.lr.data_credit.train <- step(lr.data_credit.train,direction="backward",trace=0)
+step.lr.data_credit.train
+
+# Classify the responses in the test data set with this new model
+
+step.lr.data_credit.test <- predict(step.lr.data_credit.train,newdata=data_credit.X.test)
+head(step.lr.data_credit.test)
+
+# Number of data_credit payments classified in each group
+
+summary(step.lr.data_credit.test)
+
+# Table with good and bad classifications
+
+table(data_credit.Y.test,step.lr.data_credit.test)
+
+# Obtain the Test Error Rate (TER)
+
+step.lr.data_credit.TER <- mean(data_credit.Y.test!=step.lr.data_credit.test)
+step.lr.data_credit.TER
+
+# This model is slightly better than the original one
+
+# Obtain the probabilities of the first level which in this case is not data_credit payments
+
+prob.step.lr.data_credit.test <- predict(step.lr.data_credit.train,newdata=data_credit.X.test,type ="probs")
+head(prob.step.lr.data_credit.test)
+
+# Make a plot of the errors made and the probabilities to see if they are complicated cases
+# In orange, wrong classifications, in green, good classifications
+
+colors.errors.step.lr.data_credit.test <- c("orange","chartreuse")[1*(data_credit.Y.test==step.lr.data_credit.test)+1]
+plot(1:n.data_credit.test,prob.step.lr.data_credit.test,col=colors.errors.step.lr.data_credit.test,pch=20,type="p",xlab="Test sample",ylab="Probabilities")
+abline(h=0.5)
+
+```
+
+
+
+
+
+##################################################################################################################
+##################################################################################################################
+# Logistic regression II
+##################################################################################################################
+##################################################################################################################
+
+```{r}
+# Remove everything
+rm(list=ls())
+```
+
+
+```{r}
+library(ISLR)
+library(caret)
+```
+
+
+
+```{r}
+data_credit = read.csv("C:/Users/angel/Desktop/2º S-C/1.- Statistical Learning/Project/Step 4/data_credit_without_outliers.csv", sep=",",dec=".")
+data_credit.X <- data_credit[, 1:(ncol(data_credit)-1)]
+data_credit.Y <- data_credit[, 24]
+data_credit.Y<- factor(data_credit.Y,
+levels = c(1,0),
+labels = c("Default Payment", "Not Default Payment"))
+
+```
+
+
+```{r}
+# Transform the categorical predictor into a binary variable
+
+dummy.data_credit.X <- dummyVars("~ .",data=data_credit.X,fullRank=TRUE)
+data_credit.X <- data.frame(predict(dummy.data_credit.X,newdata=data_credit.X))
+#head(data_credit.X)
+
+# Obtain sample size and dimensions of the data matrix
+
+n.data_credit.X <- nrow(data_credit.X)
+#n.data_credit.X
+p.data_credit.X <- ncol(data_credit.X)
+#p.data_credit.X
+
+# Compute number of clients in each group
+
+n.data_credit <- sum(data_credit.Y=="Default Payment")
+#n.data_credit
+n.Nodata_credit <- sum(data_credit.Y=="Not Default Payment")
+#n.Nodata_credit
+
+# Proportions of clients in each class
+
+(n.data_credit / n.data_credit.X)*100
+(n.Nodata_credit / n.data_credit.X)*100
+
+
+```
+
+Thus, 22.11% of the clients are default payments and 77.88% are Not default payment
+
+
+
+```{r}
+# Make a scatterplot matrix of the data matrix
+
+# Create a color object to distinguish the two groups in the plots
+
+###colors.data_credit.Y <- c("deepskyblue4","firebrick4")[data_credit.Y]
+###head(colors.data_credit.Y)
+
+###pairs(data_credit.X,col=colors.data_credit.Y,pch=20)   ######################## WE DOESN'T SEE ANYTHING
+
+```
+
+
+
+
+
+```{r}
+##################################################################################################################
+# First, obtain the training and the test samples. For that, we take at random the 70% of the observations as the
+# training sample and the other 30% of the observations as the test sample
+##################################################################################################################
+
+# Fix the seed to have the same results
+
+set.seed(1)
+
+# Sample sizes of both data sets
+
+n.data_credit.train <- floor(.7 * n.data_credit.X)
+#n.data_credit.train
+n.data_credit.test <- n.data_credit.X - n.data_credit.train
+#n.data_credit.test
+
+# Obtain the indices of the observations in both data sets at random
+
+indices.data_credit.train <- sort(sample(1:n.data_credit.X,n.data_credit.train))
+#length(indices.data_credit.train)
+#head(indices.data_credit.train)
+
+indices.data_credit.test <- setdiff(1:n.data_credit.X,indices.data_credit.train)
+#length(indices.data_credit.test)
+#head(indices.data_credit.test)
+
+# Obtain the training data matrix and response vector
+
+data_credit.X.train <- data_credit.X[indices.data_credit.train,]
+#head(data_credit.X.train)
+data_credit.Y.train <- data_credit.Y[indices.data_credit.train]
+#head(data_credit.Y.train)
+
+# Obtain the test data matrix and response vector
+
+data_credit.X.test <- data_credit.X[indices.data_credit.test,]
+#head(data_credit.X.test)
+data_credit.Y.test <- data_credit.Y[indices.data_credit.test]
+#head(data_credit.Y.test)
+
+# Which are the proportions of data_credit payments and Not data_credit payments clients in both data sets?
+
+(sum(data_credit.Y.train=="Default Payment")/n.data_credit.train)*100
+(sum(data_credit.Y.train=="Not Default Payment")/n.data_credit.train)*100
+
+(sum(data_credit.Y.test=="Default Payment")/n.data_credit.test)*100
+(sum(data_credit.Y.test=="Not Default Payment")/n.data_credit.test)*100
+
+# So, they are close to the originals (original: 22.32%, and 77.67% ; new: 21.61% and 78.38%)
+
+
+```
+
+
+```{r}
+
+##################################################################################################################
+# Second, estimate the parameters of the logistic regression model with the training sample
+##################################################################################################################
+
+# Fit the model with the training samples
+
+lr.data_credit.train <- multinom(data_credit.Y.train ~ .,data=data_credit.X.train)
+
+# Have a look at the estimated coefficients and their standard errors
+
+summary(lr.data_credit.train)
+
+# We can see which are the most significant coefficients with the t-test
+
+# First, compute the t-tests
+
+t.test.lr.data_credit.train <- summary(lr.data_credit.train)$coefficients/summary(lr.data_credit.train)$standard.errors
+t.test.lr.data_credit.train
+
+# Second, sort the absolute value of the t-test in decreasing order
+
+sort(abs(t.test.lr.data_credit.train),decreasing=TRUE)
+
+# We can see that the most relevant variables are PAY_SEP, SEX and PAY_MAY. BILL_APR is not significant
+# We will get back to this later
+
+```
+
+
+```{r}
+##################################################################################################################
+# Third, we classify the responses in the test data set and estimate the test error rate
+##################################################################################################################
+
+# Classify the responses in the test data set
+
+lr.data_credit.test <- predict(lr.data_credit.train,newdata=data_credit.X.test)
+head(lr.data_credit.test)
+
+# Number of clients classified in each group
+
+summary(lr.data_credit.test)
+
+# Table with good and bad classifications
+
+table(data_credit.Y.test,lr.data_credit.test)
+
+# Obtain the Test Error Rate (TER)
+
+lr.data_credit.TER <- mean(data_credit.Y.test!=lr.data_credit.test)
+lr.data_credit.TER
+
+# Obtain the probabilities of the first level which in this case is No
+
+prob.lr.data_credit.test <- predict(lr.data_credit.train,newdata=data_credit.X.test,type ="probs")
+head(prob.lr.data_credit.test)
+
+# Make a plot of the errors made and the probabilities to see if they are complicated cases
+# In orange, wrong classifications, in green, good classifications
+
+colors.errors.lr.data_credit.test <- c("orange","chartreuse")[1*(data_credit.Y.test==lr.data_credit.test)+1]
+plot(1:n.data_credit.test,prob.lr.data_credit.test,col=colors.errors.lr.data_credit.test,pch=20,type="p",xlab="Test sample",ylab="Probabilities")
+abline(h=0.5)
+
+
+```
+
+
+
+```{r}
+##################################################################################################################
+# Fourth, try to improve the test error rate by deleting predictors without discriminatory power
+##################################################################################################################
+
+# Use the function step to delete the useless predictors
+
+step.lr.data_credit.train <- step(lr.data_credit.train,direction="backward",trace=0)
+#step.lr.data_credit.train
+
+# Classify the responses in the test data set with this new model
+
+step.lr.data_credit.test <- predict(step.lr.data_credit.train,newdata=data_credit.X.test)
+#head(step.lr.data_credit.test)
+
+# Number of emails classified in each group
+
+summary(step.lr.data_credit.test)
+
+# Table with good and bad classifications
+
+table(data_credit.Y.test,step.lr.data_credit.test)
+
+# Obtain the Test Error Rate (TER)
+
+step.lr.data_credit.TER <- mean(data_credit.Y.test!=step.lr.data_credit.test)
+step.lr.data_credit.TER
+
+# This model is similar than the original one
+
+```
+
+Output:
+
+Call:
+multinom(formula = data_credit.Y.train ~ LIMIT_BAL + SEX + EDUCATION + 
+    MARRIAGE + AGE + PAY_SEP + PAY_AUG + PAY_JUL + PAY_MAY + 
+    BILL_SEP + BILL_JUL + PAY_AMT_SEP + PAY_AMT_AUG + PAY_AMT_JUL + 
+    PAY_AMT_JUN, data = data_credit.X.train)
+
+Coefficients:
+  (Intercept)     LIMIT_BAL           SEX     EDUCATION      MARRIAGE           AGE       PAY_SEP       PAY_AUG       PAY_JUL 
+ 4.465245e-01  5.673618e-07  1.478953e-01  9.477063e-02  1.580680e-01 -7.441790e-03 -5.679811e-01 -5.835733e-02 -8.456392e-02 
+      PAY_MAY      BILL_SEP      BILL_JUL   PAY_AMT_SEP   PAY_AMT_AUG   PAY_AMT_JUL   PAY_AMT_JUN 
+-7.909711e-02  5.412347e-06 -4.173341e-06  1.663170e-05  1.603770e-05  4.373356e-06  4.908698e-06 
+
+Residual Deviance: 19629.83 
+AIC: 19661.83 
+[1] Not data_credit Payment Not data_credit Payment Not data_credit Payment Not data_credit Payment Not data_credit Payment
+[6] Not data_credit Payment
+Levels: data_credit Payment Not data_credit Payment
+    data_credit Payment Not data_credit Payment 
+                    627                    8372 
+                         step.lr.data_credit.test
+data_credit.Y.test        data_credit Payment Not data_credit Payment
+  data_credit Payment                     449                    1496
+  Not data_credit Payment                 178                    6876
+[1] 0.1860207
+
